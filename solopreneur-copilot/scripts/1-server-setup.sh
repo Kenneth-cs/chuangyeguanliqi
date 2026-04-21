@@ -68,6 +68,7 @@ echo "[7/7] 配置防火墙..."
 ufw allow 22/tcp   # SSH
 ufw allow 80/tcp   # HTTP
 ufw allow 443/tcp  # HTTPS
+ufw allow 8080/tcp # xinfu 项目
 ufw --force enable
 
 echo ""

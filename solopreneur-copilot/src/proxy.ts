@@ -5,11 +5,12 @@ export default auth((req) => {
   const isLoggedIn = !!req.auth
   const { pathname } = req.nextUrl
 
-  // 公开路径：登录、注册、API
+  // 公开路径：登录、注册、NextAuth、以及使用 API Key 鉴权的接口
   const isPublicPath =
     pathname.startsWith("/login") ||
     pathname.startsWith("/register") ||
-    pathname.startsWith("/api/auth")
+    pathname.startsWith("/api/auth") ||
+    pathname === "/api/events"   // iOS App 用 API Key 上报事件，无需 Session
 
   if (!isLoggedIn && !isPublicPath) {
     return NextResponse.redirect(new URL("/login", req.url))

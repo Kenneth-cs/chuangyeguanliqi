@@ -30,6 +30,9 @@ model User {
   projects      Project[]
   dailyLogs     DailyLog[]
   activities    UserActivity[]
+  apiKeys          ApiKey[]
+  ownedShares      ProjectShare[] @relation("ProjectShareOwner")
+  guestShares      ProjectShare[] @relation("ProjectShareGuest")
 }
 
 // NextAuth.js 标准表
@@ -127,6 +130,8 @@ model Project {
   userId      String
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   metrics     ProductMetrics[]
+  appEvents   AppEvent[]
+  shares      ProjectShare[]
 }
 
 // ============================================================
@@ -182,6 +187,62 @@ model ProductMetrics {
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, date])
+}
+
+// ============================================================
+// 模块五：产品数据看板 — 事件流
+// ============================================================
+model AppEvent {
+  id          String   @id @default(cuid())
+  projectId   String
+  deviceId    String            // 设备 ID，代表一个匿名用户（iOS IDFV）
+  eventId     String            // 事件标识符，如 record_submit_success
+  eventName   String            // 中文名称，如「记账成功」，由上报方传入
+  params      Json?             // 事件附加参数（金额区间、分类等）
+  appVersion  String?           // App 版本号，如 1.0.2
+  osVersion   String?           // 系统版本号，如 17.4.1
+  occurredAt  DateTime          // 事件发生时间（客户端时间）
+  createdAt   DateTime @default(now())
+
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, occurredAt])
+  @@index([projectId, eventId, occurredAt])
+  @@index([projectId, deviceId, occurredAt])
+}
+
+// ============================================================
+// 模块五：产品数据看板 — API Key 管理
+// ============================================================
+model ApiKey {
+  id          String    @id @default(cuid())
+  userId      String
+  key         String    @unique   // sk_live_xxxxx
+  label       String              // 备注名，如「钱小满 iOS」
+  createdAt   DateTime  @default(now())
+  lastUsedAt  DateTime?
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ============================================================
+// 模块六：产品数据看板 — 项目分享
+// ============================================================
+model ProjectShare {
+  id            String    @id @default(cuid())
+  projectId     String
+  ownerUserId   String                          // 项目拥有者
+  shareCode     String    @unique               // 可读分享码，如 QXMN-2026
+  guestUserId   String?                         // 加入者账号 ID，null = 还没人用
+  createdAt     DateTime  @default(now())
+  revokedAt     DateTime?                       // 不为 null 即已撤销
+
+  project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  ownerUser     User      @relation("ProjectShareOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  guestUser     User?     @relation("ProjectShareGuest", fields: [guestUserId], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+  @@index([guestUserId])
 }
 
 // ============================================================

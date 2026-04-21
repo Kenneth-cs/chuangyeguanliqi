@@ -9,6 +9,7 @@ import {
   History,
   ListTodo,
   BarChart2,
+  Activity,
   Settings,
   Zap,
   LogOut,
@@ -22,6 +23,7 @@ const navItems = [
   { name: "每日复盘", path: "/daily", icon: History },
   { name: "项目管理", path: "/project-management", icon: ListTodo },
   { name: "营销看板", path: "/marketing", icon: BarChart2 },
+  { name: "产品数据", path: "/product-data", icon: Activity },
 ]
 
 export function Sidebar() {
@@ -60,7 +62,7 @@ export function Sidebar() {
             href={item.path}
             className={cn(
               "flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-colors",
-              pathname === item.path
+              (item.path === "/" ? pathname === "/" : pathname.startsWith(item.path))
                 ? "bg-[#137FEC] text-white shadow-lg shadow-blue-500/20"
                 : "text-slate-400 hover:bg-slate-800 hover:text-white"
             )}
