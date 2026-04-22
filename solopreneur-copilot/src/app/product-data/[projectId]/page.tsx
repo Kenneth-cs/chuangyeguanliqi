@@ -744,7 +744,25 @@ func trackEvent(eventId: String, eventName: String, params: [String: Any]? = nil
     req.setValue("Bearer \\(kApiKey)", forHTTPHeaderField: "Authorization")
     req.httpBody = try? JSONSerialization.data(withJSONObject: body)
     URLSession.shared.dataTask(with: req).resume()
-}`}
+}
+
+// ── 使用示例 ──────────────────────────────────────────────
+// 记账成功
+trackEvent(
+    eventId: "record_submit_success",
+    eventName: "记账成功",
+    params: ["category": "餐饮", "amount_level": "level_1_under100"]
+)
+
+// 点击记一笔入口
+trackEvent(eventId: "record_click_add", eventName: "点击记一笔入口")
+
+// 完成引导
+trackEvent(
+    eventId: "onboarding_complete",
+    eventName: "完成引导",
+    params: ["steps_skipped": 0]
+)`}
             </pre>
           </Card>
         </div>
