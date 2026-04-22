@@ -121,6 +121,9 @@ model Project {
   // 状态
   status      String    @default("active")         // active / launched / abandoned
 
+  // 产品数据看板追踪开关（false = 在产品数据页隐藏）
+  analyticsEnabled Boolean @default(true)
+
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 

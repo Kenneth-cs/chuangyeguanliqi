@@ -7,9 +7,9 @@ export async function GET() {
   const session = await auth()
   if (!session?.user?.id) return NextResponse.json({ error: "未登录" }, { status: 401 })
 
-  // 自己的项目
+  // 自己的项目（只显示已开启追踪的）
   const ownProjects = await prisma.project.findMany({
-    where: { userId: session.user.id },
+    where: { userId: session.user.id, analyticsEnabled: true },
     orderBy: { updatedAt: "desc" },
     select: { id: true, name: true, status: true },
   })

@@ -13,7 +13,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const project = await prisma.project.findFirst({ where: { id, userId: session.user.id } })
   if (!project) return NextResponse.json({ error: "项目不存在" }, { status: 404 })
 
-  const allowed = ["name", "description", "deadline", "tasks", "status", "liveUrl", "repoUrl", "launchDate"]
+  const allowed = ["name", "description", "deadline", "tasks", "status", "liveUrl", "repoUrl", "launchDate", "analyticsEnabled"]
   const data: Record<string, unknown> = {}
   for (const key of allowed) {
     if (body[key] !== undefined) {

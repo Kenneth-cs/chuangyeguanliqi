@@ -136,3 +136,9 @@
 *   **P2 (第三周及以后)**：
     *   模块四：矩阵基础设施 (Passport & Payment)。
     *   模块五：自动化营销。
+
+
+用户名是 ubuntu
+
+IP 直接访问 http://124.222.88.25
+https://www.superindividual.youqukeji.cn/ 

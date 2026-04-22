@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Card } from "@/components/ui/card"
-import { Activity, Smartphone, ArrowRight, Plus, Clock, Share2, Loader2 } from "lucide-react"
+import { Activity, Smartphone, ArrowRight, Plus, Clock, Share2, Loader2, MoreHorizontal, EyeOff } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 
@@ -23,6 +23,29 @@ export default function ProductDataPage() {
   const [loading, setLoading] = useState(true)
   const [shareCode, setShareCode] = useState("")
   const [joining, setJoining] = useState(false)
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
+  const [removing, setRemoving] = useState<string | null>(null)
+
+  const handleRemove = async (projectId: string, projectName: string) => {
+    if (!confirm(`确认将「${projectName}」从产品数据移除？\n\n移除后该项目不再显示在此页，历史数据保留，可在项目管理中重新开启。`)) return
+    setRemoving(projectId)
+    try {
+      const res = await fetch(`/api/projects/${projectId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ analyticsEnabled: false }),
+      })
+      if (res.ok) {
+        setProjects((prev) => prev.filter((p) => p.id !== projectId))
+        toast.success(`已将「${projectName}」从产品数据移除`)
+      } else {
+        toast.error("操作失败，请重试")
+      }
+    } finally {
+      setRemoving(null)
+      setMenuOpenId(null)
+    }
+  }
 
   const loadProjects = () => {
     fetch("/api/product-data/projects")
@@ -32,6 +55,14 @@ export default function ProductDataPage() {
   }
 
   useEffect(() => { loadProjects() }, [])
+
+  // 点击页面其他区域关闭菜单
+  useEffect(() => {
+    if (!menuOpenId) return
+    const close = () => setMenuOpenId(null)
+    document.addEventListener("click", close)
+    return () => document.removeEventListener("click", close)
+  }, [menuOpenId])
 
   const handleJoin = async () => {
     if (!shareCode.trim()) return
@@ -138,11 +169,11 @@ export default function ProductDataPage() {
           {projects.map((p) => (
             <Card
               key={p.id}
-              onClick={() => router.push(`/product-data/${p.id}`)}
-              className="cursor-pointer bg-[#1C2127] p-5 transition-all hover:border-[#137FEC]/50 hover:bg-slate-800/80 group"
+              className="relative bg-[#1C2127] p-5 transition-all hover:border-[#137FEC]/50 hover:bg-slate-800/80 group"
+              onClick={() => { if (menuOpenId !== p.id) router.push(`/product-data/${p.id}`) }}
             >
               <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 cursor-pointer">
                   <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-[#137FEC] to-blue-700 shadow-lg shadow-blue-500/20">
                     <Smartphone className="h-5 w-5 text-white" />
                   </div>
@@ -175,7 +206,32 @@ export default function ProductDataPage() {
                     </span>
                   </div>
                 </div>
-                <ArrowRight className="h-4 w-4 text-slate-600 group-hover:text-[#137FEC] transition-colors" />
+
+                {/* 右上角菜单 */}
+                {!p.isShared && (
+                  <div className="relative" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      onClick={() => setMenuOpenId(menuOpenId === p.id ? null : p.id)}
+                      className="flex h-7 w-7 items-center justify-center rounded-md text-slate-500 hover:bg-slate-700 hover:text-slate-300 transition-colors"
+                    >
+                      <MoreHorizontal className="h-4 w-4" />
+                    </button>
+                    {menuOpenId === p.id && (
+                      <div className="absolute right-0 top-8 z-50 w-40 rounded-lg border border-slate-700 bg-[#1C2127] shadow-xl py-1">
+                        <button
+                          onClick={() => handleRemove(p.id, p.name)}
+                          disabled={removing === p.id}
+                          className="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-slate-300 hover:bg-slate-700/60 hover:text-red-400 transition-colors disabled:opacity-50"
+                        >
+                          {removing === p.id
+                            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            : <EyeOff className="h-3.5 w-3.5" />}
+                          移除追踪
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="mt-4 grid grid-cols-2 gap-3">
