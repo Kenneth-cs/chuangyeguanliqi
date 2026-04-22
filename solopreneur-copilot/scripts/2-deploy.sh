@@ -94,21 +94,40 @@ REMOTE_SCRIPT
 echo ""
 echo "[4/5] 配置 Nginx 反向代理..."
 
-NGINX_CONF='server {
+ssh -i $SSH_KEY -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_IP << 'NGINX_SCRIPT'
+sudo tee /etc/nginx/sites-available/solopreneur > /dev/null << 'NGINXEOF'
+# HTTP → HTTPS 跳转
+server {
     listen 80;
-    server_name 124.222.88.25;
+    server_name www.superindividual.youqukeji.cn superindividual.youqukeji.cn 124.222.88.25;
+    return 301 https://www.superindividual.youqukeji.cn$request_uri;
+}
+
+# HTTPS 主配置
+server {
+    listen 443 ssl;
+    server_name www.superindividual.youqukeji.cn superindividual.youqukeji.cn;
+
+    ssl_certificate /etc/letsencrypt/live/www.superindividual.youqukeji.cn/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/www.superindividual.youqukeji.cn/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+
     client_max_body_size 10M;
     gzip on;
     gzip_types text/plain text/css application/json application/javascript text/xml application/xml;
+
     location /_next/static/ {
         alias /app/solopreneur-copilot/.next/static/;
         expires 1y;
         add_header Cache-Control "public, immutable";
     }
+
     location /public/ {
         alias /app/solopreneur-copilot/public/;
         expires 7d;
     }
+
     location / {
         proxy_pass http://127.0.0.1:3000;
         proxy_http_version 1.1;
@@ -120,14 +139,13 @@ NGINX_CONF='server {
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_cache_bypass $http_upgrade;
     }
-}'
-
-ssh -i $SSH_KEY -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_IP \
-  "echo '$NGINX_CONF' | sudo tee /etc/nginx/sites-available/solopreneur > /dev/null && \
-   sudo ln -sf /etc/nginx/sites-available/solopreneur /etc/nginx/sites-enabled/ && \
-   sudo rm -f /etc/nginx/sites-enabled/default && \
-   sudo nginx -t && sudo systemctl reload nginx && \
-   echo '✓ Nginx 配置完成'"
+}
+NGINXEOF
+sudo ln -sf /etc/nginx/sites-available/solopreneur /etc/nginx/sites-enabled/
+sudo rm -f /etc/nginx/sites-enabled/default
+sudo nginx -t && sudo systemctl reload nginx
+echo "✓ Nginx 配置完成（含 HTTPS 域名）"
+NGINX_SCRIPT
 
 # ── 5. 启动/重启应用 ─────────────────────────────────────
 echo ""
