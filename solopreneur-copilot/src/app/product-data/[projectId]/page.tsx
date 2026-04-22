@@ -5,8 +5,8 @@ import { useParams, useRouter } from "next/navigation"
 import { Card } from "@/components/ui/card"
 import {
   ArrowLeft, Activity, BarChart2, Users, Key, Share2,
-  TrendingUp, Layers, Copy, Trash2, Plus, Check, Loader2,
-  Info, ChevronDown, ChevronUp,
+  TrendingUp, SlidersHorizontal, Copy, Trash2, Plus, Check, Loader2,
+  Info, ChevronDown, ChevronUp, Download,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
@@ -109,19 +109,24 @@ const METRICS_GUIDE = {
 }
 
 // ── 类型 ──────────────────────────────────────────────────
-type Tab = "overview" | "retention" | "funnel" | "features" | "events" | "apikey" | "share"
+type Tab = "overview" | "retention" | "funnel" | "params" | "events" | "apikey" | "share"
 type RangeKey = "today" | "yesterday" | "7d" | "30d" | "month"
 
 interface OverviewRow { date: string; dau: number; newUsers: number; records: number; activationRate: number | null; penetrationRate: number | null }
 interface RetentionRow { cohortDate: string; newUsers: number; d1: number | null; d3: number | null; d7: number | null; d30: number | null }
 interface FunnelRow { step: number; eventId: string; eventName: string; uv: number; stepRate: number | null; totalRate: number }
 interface EventRow { eventId: string; eventName: string; count: number; deviceCount: number; versionBreakdown: Record<string, number> }
-interface FeaturesData {
-  projectFeatures: { label: string; createCount: number; deviceCount: number; budgetRate: number; reportClicks: number }[]
-  recordTypeBreakdown: { label: string; count: number; deviceCount: number }[]
-  amountBreakdown: { level: string; label: string; count: number; ratio: number }[]
-  categoryBreakdown: { category: string; count: number; ratio: number }[]
+interface ParamEventItem { eventId: string; eventName: string; count: number }
+interface ParamStringDist { value: string; count: number; ratio: number }
+interface ParamNumberDist { label: string; count: number; ratio: number }
+interface ParamResult {
+  key: string
+  type: "string" | "number"
+  total?: number
+  distribution: ParamStringDist[] | ParamNumberDist[]
+  stats?: { avg: number; max: number; min: number; total: number }
 }
+interface ParamsData { eventId: string; eventName: string; totalCount: number; params: ParamResult[] }
 interface ApiKeyRow { id: string; label: string; keyPreview: string; createdAt: string; lastUsedAt: string | null }
 interface ShareRow { id: string; shareCode: string; createdAt: string; guestUser: { id: string; name: string | null; email: string } | null }
 
@@ -137,7 +142,7 @@ const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: "overview",   label: "核心大盘",  icon: Activity },
   { id: "retention",  label: "留存矩阵",  icon: Users },
   { id: "funnel",     label: "转化路径",  icon: TrendingUp },
-  { id: "features",   label: "功能分析",  icon: Layers },
+  { id: "params",     label: "参数分析",  icon: SlidersHorizontal },
   { id: "events",     label: "事件明细",  icon: BarChart2 },
   { id: "apikey",     label: "API 接入",  icon: Key },
   { id: "share",      label: "分享管理",  icon: Share2 },
@@ -186,10 +191,24 @@ export default function ProductDetailPage() {
   const [overviewData, setOverviewData] = useState<OverviewRow[]>([])
   const [retentionData, setRetentionData] = useState<RetentionRow[]>([])
   const [funnelData, setFunnelData] = useState<FunnelRow[]>([])
-  const [featuresData, setFeaturesData] = useState<FeaturesData | null>(null)
   const [eventData, setEventData] = useState<EventRow[]>([])
   const [apiKeys, setApiKeys] = useState<ApiKeyRow[]>([])
   const [shares, setShares] = useState<ShareRow[]>([])
+
+  // 参数分析 Tab 状态
+  const [paramEventList, setParamEventList] = useState<ParamEventItem[]>([])
+  const [paramsEventId, setParamsEventId] = useState("")
+  const paramsEventIdRef = useRef("")
+  const [paramsData, setParamsData] = useState<ParamsData | null>(null)
+
+  // Excel 导出弹窗状态
+  const [showExport, setShowExport] = useState(false)
+  const today = new Date().toISOString().slice(0, 10)
+  const sevenDaysAgo = new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10)
+  const [exportStartDate, setExportStartDate] = useState(sevenDaysAgo)
+  const [exportEndDate, setExportEndDate] = useState(today)
+  const [exportSheets, setExportSheets] = useState(new Set(["events", "daily", "retention"]))
+  const [exporting, setExporting] = useState(false)
 
   const [newKeyLabel, setNewKeyLabel] = useState("")
   const [creatingKey, setCreatingKey] = useState(false)
@@ -224,8 +243,20 @@ export default function ProductDetailPage() {
       case "funnel":
         fetch(`/api/analytics/funnel${qs()}&steps=record_click_add,record_submit_success,record_cancel`).then(r => r.json()).then(d => { setFunnelData(d); done() }).catch(done)
         break
-      case "features":
-        fetch(`/api/analytics/features${qs()}`).then(r => r.json()).then(d => { setFeaturesData(d); done() }).catch(done)
+      case "params":
+        fetch(`/api/analytics/event-list${qs()}`).then(r => r.json()).then(async (list: ParamEventItem[]) => {
+          setParamEventList(list)
+          const toSelect = paramsEventIdRef.current || (list.length > 0 ? list[0].eventId : "")
+          if (toSelect) {
+            if (!paramsEventIdRef.current) {
+              paramsEventIdRef.current = toSelect
+              setParamsEventId(toSelect)
+            }
+            const pData = await fetch(`/api/analytics/params${qs()}&eventId=${toSelect}`).then(r => r.json())
+            setParamsData(pData)
+          }
+          done()
+        }).catch(done)
         break
       case "events":
         fetch(`/api/analytics/events${qs()}`).then(r => r.json()).then(d => { setEventData(d); done() }).catch(done)
@@ -279,6 +310,49 @@ export default function ProductDetailPage() {
     toast.success("分享已撤销"); loadTab()
   }
 
+  const handleParamEventChange = async (eventId: string) => {
+    paramsEventIdRef.current = eventId
+    setParamsEventId(eventId)
+    setLoading(true)
+    try {
+      const data = await fetch(`/api/analytics/params${qs()}&eventId=${eventId}`).then(r => r.json())
+      setParamsData(data)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleExport = async () => {
+    if (!exportStartDate || !exportEndDate || exportSheets.size === 0) return
+    setExporting(true)
+    try {
+      const res = await fetch("/api/analytics/export", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId,
+          startDate: exportStartDate,
+          endDate: exportEndDate,
+          sheets: [...exportSheets],
+        }),
+      })
+      if (!res.ok) { toast.error("导出失败，请重试"); return }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      const cd = res.headers.get("Content-Disposition") ?? ""
+      const match = cd.match(/filename\*=UTF-8''(.+)/)
+      a.download = match ? decodeURIComponent(match[1]) : `export_${exportStartDate}_${exportEndDate}.xlsx`
+      a.href = url
+      a.click()
+      URL.revokeObjectURL(url)
+      setShowExport(false)
+      toast.success("导出成功")
+    } finally {
+      setExporting(false)
+    }
+  }
+
   const sortedEvents = [...eventData].sort((a, b) =>
     sortAsc ? a[sortField] - b[sortField] : b[sortField] - a[sortField]
   )
@@ -321,6 +395,10 @@ export default function ProductDetailPage() {
           </select>
         )}
         {loading && <Loader2 className="h-4 w-4 animate-spin text-slate-500" />}
+        <button onClick={() => setShowExport(true)}
+          className="ml-auto flex items-center gap-2 rounded-lg border border-slate-700 bg-[#1C2127] px-3 py-1.5 text-xs text-slate-400 hover:text-white hover:border-slate-500 transition-colors">
+          <Download className="h-3.5 w-3.5" />导出数据
+        </button>
       </div>
 
       {/* Tab 导航 */}
@@ -467,81 +545,89 @@ export default function ProductDetailPage() {
         </div>
       )}
 
-      {/* ── Tab 4：功能分析 ── */}
-      {tab === "features" && featuresData && (
-        <div className="space-y-6">
-          <MetricsGuide items={METRICS_GUIDE.features} />
-          {/* 记账分类 Top 10 */}
-          <Card className="bg-[#1C2127] overflow-hidden p-0">
-            <div className="border-b border-slate-800 bg-[#181C22] px-6 py-3 text-xs font-bold uppercase tracking-wider text-slate-500">记账分类分布 Top 10<InfoTooltip text="来自 record_submit_success 事件的 category 参数，统计各分类的记账次数占比。" /></div>
-            <div className="divide-y divide-slate-800/60">
-              {featuresData.categoryBreakdown.length === 0 ? (
-                <div className="py-10 text-center text-sm text-slate-500">暂无数据</div>
-              ) : featuresData.categoryBreakdown.map(row => (
-                <div key={row.category} className="flex items-center gap-4 px-6 py-3 hover:bg-slate-800/40 transition-colors">
-                  <span className="w-20 text-sm font-medium text-white">{row.category}</span>
-                  <div className="flex-1 h-2 rounded-full bg-slate-800 overflow-hidden">
-                    <div className="h-full rounded-full bg-[#137FEC]" style={{ width: `${row.ratio}%` }} />
-                  </div>
-                  <span className="w-16 text-right text-xs text-slate-400">{row.count.toLocaleString()} 次</span>
-                  <span className="w-10 text-right text-xs font-medium text-[#137FEC]">{row.ratio}%</span>
-                </div>
-              ))}
-            </div>
-          </Card>
-
-          {/* 金额区间 */}
-          <Card className="bg-[#1C2127] overflow-hidden p-0">
-            <div className="border-b border-slate-800 bg-[#181C22] px-6 py-3 text-xs font-bold uppercase tracking-wider text-slate-500">记账金额区间分布</div>
-            <div className="divide-y divide-slate-800/60">
-              {featuresData.amountBreakdown.length === 0 ? (
-                <div className="py-10 text-center text-sm text-slate-500">暂无数据</div>
-              ) : featuresData.amountBreakdown.map(row => (
-                <div key={row.level} className="flex items-center gap-4 px-6 py-3 hover:bg-slate-800/40 transition-colors">
-                  <span className="w-24 text-sm font-medium text-white">{row.label}</span>
-                  <div className="flex-1 h-2 rounded-full bg-slate-800 overflow-hidden">
-                    <div className="h-full rounded-full bg-purple-500" style={{ width: `${row.ratio}%` }} />
-                  </div>
-                  <span className="w-16 text-right text-xs text-slate-400">{row.count.toLocaleString()} 次</span>
-                  <span className="w-10 text-right text-xs font-medium text-purple-400">{row.ratio}%</span>
-                </div>
-              ))}
-            </div>
-          </Card>
-
-          {/* 记账类型 & 项目特征并排 */}
-          <div className="grid gap-4 md:grid-cols-2">
-            <Card className="bg-[#1C2127] overflow-hidden p-0">
-              <div className="border-b border-slate-800 bg-[#181C22] px-6 py-3 text-xs font-bold uppercase tracking-wider text-slate-500">记账类型分布</div>
-              <div className="divide-y divide-slate-800/60">
-                {featuresData.recordTypeBreakdown.map(row => (
-                  <div key={row.label} className="grid grid-cols-[2fr_1fr_1fr] px-6 py-3.5 text-sm hover:bg-slate-800/40 transition-colors">
-                    <div className="font-medium text-white">{row.label}</div>
-                    <div className="text-right text-slate-300">{row.count.toLocaleString()} 次</div>
-                    <div className="text-right text-slate-400">{row.deviceCount} 设备</div>
-                  </div>
+      {/* ── Tab 4：参数分析 ── */}
+      {tab === "params" && (
+        <div className="space-y-4">
+          {/* 事件选择器 */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className="text-xs text-slate-400 shrink-0">选择事件：</span>
+            {paramEventList.length === 0 ? (
+              <span className="text-xs text-slate-500">所选时间范围内暂无事件数据</span>
+            ) : (
+              <select value={paramsEventId} onChange={e => handleParamEventChange(e.target.value)}
+                className="rounded-lg border border-slate-700 bg-[#1C2127] px-3 py-1.5 text-sm text-slate-200 outline-none focus:border-[#137FEC] transition-colors min-w-0 flex-1 max-w-sm">
+                {paramEventList.map(e => (
+                  <option key={e.eventId} value={e.eventId}>
+                    {e.eventName}（{e.eventId}）— {e.count.toLocaleString()} 次
+                  </option>
                 ))}
-              </div>
-            </Card>
-            <Card className="bg-[#1C2127] overflow-hidden p-0">
-              <div className="border-b border-slate-800 bg-[#181C22] px-6 py-3 text-xs font-bold uppercase tracking-wider text-slate-500">项目创建特征</div>
-              <div className="divide-y divide-slate-800/60">
-                {featuresData.projectFeatures.map(row => (
-                  <div key={row.label} className="grid grid-cols-[2fr_1fr_1fr] px-6 py-3.5 text-sm hover:bg-slate-800/40 transition-colors">
-                    <div className="font-medium text-white">{row.label}</div>
-                    <div className="text-right text-slate-300">{row.deviceCount} 设备</div>
-                    <div className="text-right text-slate-400">报告点击 {row.reportClicks}</div>
-                  </div>
-                ))}
-              </div>
-            </Card>
+              </select>
+            )}
           </div>
-        </div>
-      )}
 
-      {/* ── Tab 4 loading state ── */}
-      {tab === "features" && !featuresData && !loading && (
-        <div className="py-16 text-center text-sm text-slate-500">暂无功能分析数据</div>
+          {paramsData && paramsData.totalCount > 0 ? (
+            <div className="space-y-4">
+              <p className="text-xs text-slate-500">
+                共 <span className="text-slate-300 font-medium">{paramsData.totalCount.toLocaleString()}</span> 条记录，
+                <span className="text-slate-300 font-medium">{paramsData.params.length}</span> 个参数字段
+              </p>
+              {paramsData.params.map(param => (
+                <Card key={param.key} className="bg-[#1C2127] overflow-hidden p-0">
+                  <div className="border-b border-slate-800 bg-[#181C22] px-6 py-3 flex items-center justify-between">
+                    <span className="font-mono text-sm font-bold text-slate-200">{param.key}</span>
+                    <span className="text-xs text-slate-500 rounded bg-slate-800 px-2 py-0.5">
+                      {param.type === "number" ? "数值型" : "字符串型"}
+                    </span>
+                  </div>
+                  {param.type === "string" ? (
+                    <div className="divide-y divide-slate-800/60">
+                      {(param.distribution as ParamStringDist[]).map(row => (
+                        <div key={row.value} className="flex items-center gap-4 px-6 py-3 hover:bg-slate-800/40 transition-colors">
+                          <span className="w-36 text-sm font-medium text-white truncate" title={row.value}>{row.value || "（空）"}</span>
+                          <div className="flex-1 h-2 rounded-full bg-slate-800 overflow-hidden">
+                            <div className="h-full rounded-full bg-[#137FEC]" style={{ width: `${row.ratio}%` }} />
+                          </div>
+                          <span className="w-20 text-right text-xs text-slate-400">{row.count.toLocaleString()} 次</span>
+                          <span className="w-10 text-right text-xs font-medium text-[#137FEC]">{row.ratio}%</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-6 space-y-4">
+                      <div className="flex gap-8 text-sm">
+                        {[
+                          { label: "均值", val: param.stats!.avg },
+                          { label: "最大值", val: param.stats!.max },
+                          { label: "最小值", val: param.stats!.min },
+                          { label: "样本数", val: param.stats!.total },
+                        ].map(({ label, val }) => (
+                          <div key={label} className="text-center">
+                            <div className="text-lg font-bold text-white">{val.toLocaleString()}</div>
+                            <div className="text-xs text-slate-500">{label}</div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="divide-y divide-slate-800/60 rounded-lg border border-slate-800 overflow-hidden">
+                        {(param.distribution as ParamNumberDist[]).map(row => (
+                          <div key={row.label} className="flex items-center gap-4 px-4 py-2.5 hover:bg-slate-800/40 transition-colors">
+                            <span className="w-32 text-sm font-medium text-white">{row.label}</span>
+                            <div className="flex-1 h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                              <div className="h-full rounded-full bg-purple-500" style={{ width: `${row.ratio}%` }} />
+                            </div>
+                            <span className="w-20 text-right text-xs text-slate-400">{row.count.toLocaleString()} 次</span>
+                            <span className="w-10 text-right text-xs font-medium text-purple-400">{row.ratio}%</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </Card>
+              ))}
+            </div>
+          ) : paramsData !== null ? (
+            <div className="py-16 text-center text-sm text-slate-500">该事件在所选时间范围内暂无参数数据</div>
+          ) : null}
+        </div>
       )}
 
       {/* ── Tab 5：事件明细 ── */}
@@ -712,6 +798,64 @@ func trackEvent(eventId: String, eventName: String, params: [String: Any]? = nil
               <p className="text-slate-500 text-sm">还没有生成过分享码</p>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── Excel 导出弹窗 ── */}
+      {showExport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          onClick={() => setShowExport(false)}>
+          <div className="bg-[#1C2127] rounded-xl border border-slate-700 p-6 w-96 space-y-5 shadow-2xl"
+            onClick={e => e.stopPropagation()}>
+            <h3 className="font-bold text-white text-lg">导出数据</h3>
+
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">日期范围</label>
+              <div className="flex items-center gap-2">
+                <input type="date" value={exportStartDate} onChange={e => setExportStartDate(e.target.value)}
+                  className="flex-1 rounded-lg border border-slate-700 bg-slate-800/50 px-3 py-2 text-sm text-white outline-none focus:border-[#137FEC] transition-colors" />
+                <span className="text-slate-500 text-sm shrink-0">至</span>
+                <input type="date" value={exportEndDate} onChange={e => setExportEndDate(e.target.value)}
+                  className="flex-1 rounded-lg border border-slate-700 bg-slate-800/50 px-3 py-2 text-sm text-white outline-none focus:border-[#137FEC] transition-colors" />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">导出内容（Sheet）</label>
+              {[
+                { key: "events", label: "事件流水", desc: "全量原始事件 + params 字段自动展开为列" },
+                { key: "daily", label: "每日汇总", desc: "DAU / 新增用户 / 事件总量" },
+                { key: "retention", label: "留存矩阵", desc: "D1 / D3 / D7 / D30 留存率" },
+              ].map(s => (
+                <label key={s.key} className="flex items-start gap-3 cursor-pointer rounded-lg px-3 py-2.5 hover:bg-slate-800/50 transition-colors">
+                  <input type="checkbox" checked={exportSheets.has(s.key)}
+                    onChange={() => {
+                      const next = new Set(exportSheets)
+                      next.has(s.key) ? next.delete(s.key) : next.add(s.key)
+                      setExportSheets(next)
+                    }}
+                    className="mt-0.5 rounded accent-[#137FEC]" />
+                  <div>
+                    <span className="text-sm font-medium text-slate-200">{s.label}</span>
+                    <span className="text-xs text-slate-500 ml-2">{s.desc}</span>
+                  </div>
+                </label>
+              ))}
+            </div>
+
+            <div className="flex gap-3 pt-1">
+              <button onClick={() => setShowExport(false)}
+                className="flex-1 rounded-lg border border-slate-700 py-2 text-sm text-slate-400 hover:text-white transition-colors">
+                取消
+              </button>
+              <button onClick={handleExport}
+                disabled={exporting || exportSheets.size === 0 || !exportStartDate || !exportEndDate}
+                className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-[#137FEC] py-2 text-sm font-bold text-white hover:bg-blue-600 disabled:opacity-50 transition-colors">
+                {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                导出 Excel
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
