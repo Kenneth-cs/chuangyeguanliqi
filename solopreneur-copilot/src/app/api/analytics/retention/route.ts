@@ -76,6 +76,7 @@ export async function GET(req: Request) {
       cohortDate,
       newUsers,
       d1: calcRetention(1),
+      d3: calcRetention(3),
       d7: calcRetention(7),
       d30: calcRetention(30),
     })

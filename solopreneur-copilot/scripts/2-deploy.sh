@@ -9,7 +9,7 @@ set -e
 SERVER_IP="124.222.88.25"
 SERVER_USER="root"
 SERVER_DIR="/app/solopreneur-copilot"
-SSH_KEY="$HOME/.ssh/id_rsa"   # 如果你的私钥路径不同，修改这里
+SSH_KEY="/Users/cs/Desktop/CS/AI/FWQ_sshkey/cs_fwq.pem"
 
 echo "=============================="
 echo "  超级个体 - 一键部署"
