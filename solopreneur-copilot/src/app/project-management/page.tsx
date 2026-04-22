@@ -6,7 +6,7 @@ import { DatePicker } from "@/components/ui/date-picker"
 import {
   AlertTriangle, Clock, CheckSquare, Square, Rocket, Trash2,
   Plus, RefreshCw, ExternalLink, Github, Calendar,
-  CheckCircle2, XCircle, Zap, Edit3, Save, X, Target, Wrench,
+  CheckCircle2, XCircle, Zap, Edit3, Save, X, Target, Wrench, Loader2,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
@@ -330,6 +330,9 @@ export default function ProjectManagement() {
   const [editingUrl, setEditingUrl] = useState("")
   const [showUrlEdit, setShowUrlEdit] = useState(false)
   const [taskTab, setTaskTab] = useState<"validation" | "dev">("validation")
+  const [editingName, setEditingName] = useState(false)
+  const [nameInput, setNameInput] = useState("")
+  const [savingName, setSavingName] = useState(false)
 
   const fetchProjects = useCallback(async () => {
     try {
@@ -391,6 +394,32 @@ export default function ProjectManagement() {
     setProjects(prev => prev.filter(p => p.id !== id))
     if (selectedId === id) setSelectedId(null)
     toast.success("项目已删除")
+  }
+
+  const startEditName = () => {
+    if (!current) return
+    setNameInput(current.name)
+    setEditingName(true)
+  }
+
+  const saveProjectName = async () => {
+    if (!current || !nameInput.trim()) return
+    setSavingName(true)
+    try {
+      const res = await fetch(`/api/projects/${current.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: nameInput.trim() }),
+      })
+      const updated = await res.json()
+      setProjects(prev => prev.map(p => p.id === current.id ? { ...p, name: updated.name } : p))
+      setEditingName(false)
+      toast.success("项目名称已更新")
+    } catch {
+      toast.error("保存失败，请重试")
+    } finally {
+      setSavingName(false)
+    }
   }
 
   const validationTasks = tasks.filter(t => t.type === "validation")
@@ -473,8 +502,37 @@ export default function ProjectManagement() {
               {/* 项目头部信息 */}
               <div className="mb-6 flex items-start justify-between border-b border-slate-800 pb-6">
                 <div>
-                  <div className="flex items-center gap-3">
-                    <h2 className="text-2xl font-bold text-white">{current.name}</h2>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    {editingName ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          autoFocus
+                          value={nameInput}
+                          onChange={e => setNameInput(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === "Enter") saveProjectName()
+                            if (e.key === "Escape") setEditingName(false)
+                          }}
+                          className="rounded-lg border border-[#137FEC]/50 bg-slate-900 px-3 py-1 text-xl font-bold text-white outline-none focus:border-[#137FEC] transition-colors w-64"
+                        />
+                        <button onClick={saveProjectName} disabled={savingName || !nameInput.trim()}
+                          className="rounded-lg bg-[#137FEC] px-2.5 py-1.5 text-white hover:bg-blue-600 disabled:opacity-50 transition-colors">
+                          {savingName ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                        </button>
+                        <button onClick={() => setEditingName(false)}
+                          className="rounded-lg border border-slate-700 px-2.5 py-1.5 text-slate-400 hover:bg-slate-800 transition-colors">
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 group">
+                        <h2 className="text-2xl font-bold text-white">{current.name}</h2>
+                        <button onClick={startEditName}
+                          className="opacity-0 group-hover:opacity-100 rounded p-1 text-slate-600 hover:text-slate-300 hover:bg-slate-800 transition-all">
+                          <Edit3 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    )}
                     {current.idea && (
                       <span className="rounded bg-[#137FEC]/10 px-2 py-0.5 text-xs text-[#137FEC] border border-[#137FEC]/20">
                         VC {current.idea.vcScore ?? "–"}分
