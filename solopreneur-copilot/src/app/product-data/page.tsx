@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Card } from "@/components/ui/card"
-import { Activity, Smartphone, ArrowRight, Plus, Clock, Share2, Loader2, MoreHorizontal, EyeOff } from "lucide-react"
+import { Activity, Smartphone, ArrowRight, Plus, Clock, Share2, Loader2, MoreHorizontal, EyeOff, Eye, ChevronDown, ChevronUp } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 
@@ -17,17 +17,26 @@ interface ProjectWithStats {
   todayEventCount: number
 }
 
+interface HiddenProject {
+  id: string
+  name: string
+  status: string
+}
+
 export default function ProductDataPage() {
   const router = useRouter()
   const [projects, setProjects] = useState<ProjectWithStats[]>([])
+  const [hiddenProjects, setHiddenProjects] = useState<HiddenProject[]>([])
   const [loading, setLoading] = useState(true)
   const [shareCode, setShareCode] = useState("")
   const [joining, setJoining] = useState(false)
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
   const [removing, setRemoving] = useState<string | null>(null)
+  const [restoring, setRestoring] = useState<string | null>(null)
+  const [hiddenOpen, setHiddenOpen] = useState(false)
 
-  const handleRemove = async (projectId: string, projectName: string) => {
-    if (!confirm(`确认将「${projectName}」从产品数据移除？\n\n移除后该项目不再显示在此页，历史数据保留，可在项目管理中重新开启。`)) return
+  const handleRemove = async (projectId: string, projectName: string, status: string) => {
+    if (!confirm(`确认将「${projectName}」从产品数据移除？\n\n移除后该项目不再显示在此页，历史数据保留，可在页面底部「已移除的项目」中重新开启。`)) return
     setRemoving(projectId)
     try {
       const res = await fetch(`/api/projects/${projectId}`, {
@@ -37,7 +46,8 @@ export default function ProductDataPage() {
       })
       if (res.ok) {
         setProjects((prev) => prev.filter((p) => p.id !== projectId))
-        toast.success(`已将「${projectName}」从产品数据移除`)
+        setHiddenProjects((prev) => [{ id: projectId, name: projectName, status }, ...prev])
+        toast.success(`已移除「${projectName}」，可在底部「已移除的项目」中恢复`)
       } else {
         toast.error("操作失败，请重试")
       }
@@ -47,10 +57,34 @@ export default function ProductDataPage() {
     }
   }
 
+  const handleRestore = async (projectId: string, projectName: string) => {
+    setRestoring(projectId)
+    try {
+      const res = await fetch(`/api/projects/${projectId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ analyticsEnabled: true }),
+      })
+      if (res.ok) {
+        setHiddenProjects((prev) => prev.filter((p) => p.id !== projectId))
+        toast.success(`已重新追踪「${projectName}」`)
+        loadProjects()
+      } else {
+        toast.error("操作失败，请重试")
+      }
+    } finally {
+      setRestoring(null)
+    }
+  }
+
   const loadProjects = () => {
     fetch("/api/product-data/projects")
       .then((r) => r.json())
-      .then((data) => { setProjects(data); setLoading(false) })
+      .then((data) => {
+        setProjects(data.projects ?? [])
+        setHiddenProjects(data.hiddenProjects ?? [])
+        setLoading(false)
+      })
       .catch(() => setLoading(false))
   }
 
@@ -219,7 +253,7 @@ export default function ProductDataPage() {
                     {menuOpenId === p.id && (
                       <div className="absolute right-0 top-8 z-50 w-40 rounded-lg border border-slate-700 bg-[#1C2127] shadow-xl py-1">
                         <button
-                          onClick={() => handleRemove(p.id, p.name)}
+                          onClick={() => handleRemove(p.id, p.name, p.status)}
                           disabled={removing === p.id}
                           className="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-slate-300 hover:bg-slate-700/60 hover:text-red-400 transition-colors disabled:opacity-50"
                         >
@@ -260,6 +294,58 @@ export default function ProductDataPage() {
               )}
             </Card>
           ))}
+        </div>
+      )}
+
+      {/* ── 已移除的项目 ── */}
+      {hiddenProjects.length > 0 && (
+        <div className="rounded-lg border border-slate-800 overflow-hidden">
+          <button
+            onClick={() => setHiddenOpen(!hiddenOpen)}
+            className="flex w-full items-center justify-between px-5 py-3.5 text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/40 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <EyeOff className="h-4 w-4 text-slate-500" />
+              <span>已移除的项目</span>
+              <span className="rounded-full bg-slate-700 px-2 py-0.5 text-xs font-bold text-slate-300">
+                {hiddenProjects.length}
+              </span>
+            </div>
+            {hiddenOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </button>
+
+          {hiddenOpen && (
+            <div className="divide-y divide-slate-800/60 border-t border-slate-800">
+              {hiddenProjects.map((p) => (
+                <div key={p.id} className="flex items-center justify-between px-5 py-3.5 hover:bg-slate-800/30 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-700/50">
+                      <Smartphone className="h-4 w-4 text-slate-500" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-slate-300">{p.name}</p>
+                      <span className={cn(
+                        "text-xs",
+                        p.status === "launched" ? "text-green-500" : p.status === "active" ? "text-blue-500" : "text-slate-500"
+                      )}>
+                        {p.status === "launched" ? "上线" : p.status === "active" ? "开发中" : "已归档"}
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleRestore(p.id, p.name)}
+                    disabled={restoring === p.id}
+                    className="flex items-center gap-1.5 rounded-lg border border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-300 hover:border-[#137FEC]/50 hover:text-[#137FEC] disabled:opacity-50 transition-colors"
+                  >
+                    {restoring === p.id
+                      ? <Loader2 className="h-3 w-3 animate-spin" />
+                      : <Eye className="h-3 w-3" />}
+                    重新追踪
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

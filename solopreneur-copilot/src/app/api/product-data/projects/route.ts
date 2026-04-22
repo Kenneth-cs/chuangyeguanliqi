@@ -14,6 +14,13 @@ export async function GET() {
     select: { id: true, name: true, status: true },
   })
 
+  // 已隐藏的项目（analyticsEnabled = false）
+  const hiddenProjects = await prisma.project.findMany({
+    where: { userId: session.user.id, analyticsEnabled: false },
+    orderBy: { updatedAt: "desc" },
+    select: { id: true, name: true, status: true },
+  })
+
   // 被共享给我的项目
   const sharedRecords = await prisma.projectShare.findMany({
     where: { guestUserId: session.user.id, revokedAt: null },
@@ -60,5 +67,8 @@ export async function GET() {
     })
   )
 
-  return NextResponse.json(result)
+  return NextResponse.json({
+    projects: result,
+    hiddenProjects: hiddenProjects.map((p) => ({ id: p.id, name: p.name, status: p.status })),
+  })
 }
