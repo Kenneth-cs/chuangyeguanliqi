@@ -7,7 +7,7 @@
 set -e
 
 SERVER_IP="124.222.88.25"
-SERVER_USER="root"
+SERVER_USER="ubuntu"
 SERVER_DIR="/app/solopreneur-copilot"
 SSH_KEY="/Users/cs/Desktop/CS/AI/FWQ_sshkey/cs_fwq.pem"
 
@@ -70,79 +70,70 @@ echo "✓ 文件上传完成"
 echo ""
 echo "[3/5] 安装依赖并执行数据库迁移..."
 
-ssh -i $SSH_KEY $SERVER_USER@$SERVER_IP << 'REMOTE_SCRIPT'
+ssh -i $SSH_KEY -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_IP << 'REMOTE_SCRIPT'
   cd /app/solopreneur-copilot
 
-  # 安装 prisma CLI（用于迁移）
-  npm install prisma @prisma/client --save-dev 2>/dev/null || true
+  # 获取 prisma 版本并安装匹配的 @prisma/client（standalone 构建不含完整包）
+  PRISMA_VER=$(node -e "console.log(require('./node_modules/prisma/package.json').version)" 2>/dev/null || echo "5.22.0")
+  echo "  安装 @prisma/client@$PRISMA_VER ..."
+  npm install @prisma/client@$PRISMA_VER 2>/dev/null || true
 
   # 加载生产环境变量
-  export $(grep -v '^#' .env.production | xargs)
+  export $(grep -v '^#' .env.production | xargs) 2>/dev/null || true
+
+  # 生成 Linux 版 Prisma Client
+  npx prisma generate
 
   # 执行数据库迁移
   npx prisma migrate deploy
 
-  echo "✓ 数据库迁移完成"
+  echo "✓ 数据库迁移 + Prisma Client 生成完成"
 REMOTE_SCRIPT
 
 # ── 4. 配置 Nginx ────────────────────────────────────────
 echo ""
 echo "[4/5] 配置 Nginx 反向代理..."
 
-ssh -i $SSH_KEY $SERVER_USER@$SERVER_IP << 'NGINX_SCRIPT'
-cat > /etc/nginx/sites-available/solopreneur << 'EOF'
-server {
+NGINX_CONF='server {
     listen 80;
     server_name 124.222.88.25;
-
-    # 上传文件大小限制
     client_max_body_size 10M;
-
-    # Gzip 压缩
     gzip on;
     gzip_types text/plain text/css application/json application/javascript text/xml application/xml;
-
-    # 静态资源直接由 Nginx 提供（跳过 Node.js，加速）
     location /_next/static/ {
         alias /app/solopreneur-copilot/.next/static/;
         expires 1y;
         add_header Cache-Control "public, immutable";
     }
-
     location /public/ {
         alias /app/solopreneur-copilot/public/;
         expires 7d;
     }
-
-    # 其他请求转发给 Next.js
     location / {
         proxy_pass http://127.0.0.1:3000;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
+        proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_cache_bypass $http_upgrade;
     }
-}
-EOF
+}'
 
-# 启用站点
-ln -sf /etc/nginx/sites-available/solopreneur /etc/nginx/sites-enabled/
-rm -f /etc/nginx/sites-enabled/default
-
-# 测试并重载 Nginx
-nginx -t && systemctl reload nginx
-echo "✓ Nginx 配置完成"
-NGINX_SCRIPT
+ssh -i $SSH_KEY -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_IP \
+  "echo '$NGINX_CONF' | sudo tee /etc/nginx/sites-available/solopreneur > /dev/null && \
+   sudo ln -sf /etc/nginx/sites-available/solopreneur /etc/nginx/sites-enabled/ && \
+   sudo rm -f /etc/nginx/sites-enabled/default && \
+   sudo nginx -t && sudo systemctl reload nginx && \
+   echo '✓ Nginx 配置完成'"
 
 # ── 5. 启动/重启应用 ─────────────────────────────────────
 echo ""
 echo "[5/5] 启动应用 (PM2)..."
 
-ssh -i $SSH_KEY $SERVER_USER@$SERVER_IP << 'START_SCRIPT'
+ssh -i $SSH_KEY -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_IP << 'START_SCRIPT'
   cd /app/solopreneur-copilot
 
   # 复制生产环境变量到运行目录
