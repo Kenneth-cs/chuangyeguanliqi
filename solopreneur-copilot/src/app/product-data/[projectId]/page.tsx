@@ -638,7 +638,7 @@ export default function ProductDetailPage() {
 {`#if DEBUG
 private let kApiBase = "http://localhost:3000"
 #else
-private let kApiBase = "http://124.222.88.25"
+private let kApiBase = "https://www.superindividual.youqukeji.cn"
 #endif
 private let kApiKey  = "cplt_••••••••"
 
