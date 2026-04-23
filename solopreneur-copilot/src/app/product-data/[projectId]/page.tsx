@@ -723,10 +723,11 @@ export default function ProductDetailPage() {
             <pre className="overflow-x-auto rounded-lg bg-slate-900 p-4 text-xs text-slate-300 leading-relaxed">
 {`#if DEBUG
 private let kApiBase = "http://localhost:3000"
+private let kApiKey  = "cplt_你本地生成的Key"  // 本地测试用 Key
 #else
 private let kApiBase = "https://www.superindividual.youqukeji.cn"
+private let kApiKey  = "cplt_••••••••"      // 线上正式环境用 Key
 #endif
-private let kApiKey  = "cplt_••••••••"
 
 func trackEvent(eventId: String, eventName: String, params: [String: Any]? = nil) {
     let body: [String: Any] = [
