@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/db/prisma"
+import { toLocalDateStr } from "@/lib/analytics/dateRange"
 
 // GET /api/analytics/retention?projectId=xxx&cohorts=30
 // 返回近 N 天每日新增设备的 D1/D7/D30 留存率
@@ -36,7 +37,7 @@ export async function GET(req: Request) {
   const activeDatesMap = new Map<string, Set<string>>()
 
   for (const e of events) {
-    const day = e.occurredAt.toISOString().slice(0, 10)
+    const day = toLocalDateStr(e.occurredAt)
     if (!firstSeenMap.has(e.deviceId)) firstSeenMap.set(e.deviceId, day)
     if (!activeDatesMap.has(e.deviceId)) activeDatesMap.set(e.deviceId, new Set())
     activeDatesMap.get(e.deviceId)!.add(day)
@@ -49,14 +50,14 @@ export async function GET(req: Request) {
     cohortMap.get(firstDay)!.push(deviceId)
   }
 
-  const today = new Date().toISOString().slice(0, 10)
+  const today = toLocalDateStr(new Date())
 
   // 生成近 cohorts 天的队列数据
   const result = []
   for (let i = cohorts - 1; i >= 0; i--) {
     const d = new Date()
     d.setDate(d.getDate() - i)
-    const cohortDate = d.toISOString().slice(0, 10)
+    const cohortDate = toLocalDateStr(d)
 
     const devices = cohortMap.get(cohortDate) ?? []
     const newUsers = devices.length
@@ -64,7 +65,7 @@ export async function GET(req: Request) {
     const calcRetention = (offsetDays: number): number | null => {
       const targetDate = new Date(cohortDate)
       targetDate.setDate(targetDate.getDate() + offsetDays)
-      const targetDay = targetDate.toISOString().slice(0, 10)
+      const targetDay = toLocalDateStr(targetDate)
       // 目标日期还没到，返回 null
       if (targetDay > today) return null
       if (newUsers === 0) return null

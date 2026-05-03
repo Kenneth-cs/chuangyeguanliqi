@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/db/prisma"
+import { toLocalDateStr } from "@/lib/analytics/dateRange"
 
 // GET /api/analytics/dau?projectId=xxx&days=30
 export async function GET(req: Request) {
@@ -31,7 +32,7 @@ export async function GET(req: Request) {
   // 按日期分组统计 distinct deviceId
   const dayMap = new Map<string, Set<string>>()
   for (const e of events) {
-    const day = e.occurredAt.toISOString().slice(0, 10)
+    const day = toLocalDateStr(e.occurredAt)
     if (!dayMap.has(day)) dayMap.set(day, new Set())
     dayMap.get(day)!.add(e.deviceId)
   }
@@ -41,7 +42,7 @@ export async function GET(req: Request) {
   for (let i = days - 1; i >= 0; i--) {
     const d = new Date()
     d.setDate(d.getDate() - i)
-    const dateStr = d.toISOString().slice(0, 10)
+    const dateStr = toLocalDateStr(d)
     result.push({ date: dateStr, dau: dayMap.get(dateStr)?.size ?? 0 })
   }
 

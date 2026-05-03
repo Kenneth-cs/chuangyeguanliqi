@@ -1,3 +1,10 @@
+export function toLocalDateStr(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, "0")
+  const day = String(d.getDate()).padStart(2, "0")
+  return `${y}-${m}-${day}`
+}
+
 export type RangeKey = "today" | "yesterday" | "7d" | "30d" | "month" | "custom"
 
 export interface DateRange {
@@ -67,7 +74,7 @@ export function buildDateList(start: Date, end: Date): string[] {
   const endDay = new Date(end)
   endDay.setHours(0, 0, 0, 0)
   while (cur <= endDay) {
-    result.push(cur.toISOString().slice(0, 10))
+    result.push(toLocalDateStr(cur))
     cur.setDate(cur.getDate() + 1)
   }
   return result

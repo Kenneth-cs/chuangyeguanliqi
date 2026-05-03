@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect } from "react"
 import { Calendar, ChevronLeft, ChevronRight, X } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { toLocalDateStr } from "@/lib/analytics/dateRange"
 
 interface DatePickerProps {
   value: string        // "YYYY-MM-DD"
@@ -163,7 +164,7 @@ export function DatePicker({ value, onChange, placeholder = "选择日期", minD
             ].map(({ label, days: d }) => {
               const target = new Date()
               target.setDate(target.getDate() + d)
-              const str = target.toISOString().slice(0, 10)
+              const str = toLocalDateStr(target)
               return (
                 <button key={label} onClick={() => { onChange(str); setOpen(false) }}
                   className="flex-1 rounded-lg border border-slate-700 py-1 text-xs text-slate-400 hover:bg-slate-800 hover:text-white transition-colors">

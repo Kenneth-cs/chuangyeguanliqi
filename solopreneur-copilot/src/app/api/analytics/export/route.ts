@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/db/prisma"
+import { toLocalDateStr } from "@/lib/analytics/dateRange"
 import * as XLSX from "xlsx"
 
 // POST /api/analytics/export
@@ -57,7 +58,7 @@ export async function POST(req: Request) {
     const eventsRows = rawEvents.map(e => {
       const params = (e.params as Record<string, unknown>) ?? {}
       const row: Record<string, string | number> = {
-        日期: e.occurredAt.toISOString().slice(0, 10),
+        日期: toLocalDateStr(e.occurredAt),
         时间: e.occurredAt.toISOString().slice(11, 19),
         设备ID: e.deviceId,
         事件名称: e.eventName,
@@ -82,7 +83,7 @@ export async function POST(req: Request) {
     const dateList: string[] = []
     const cur = new Date(start)
     while (cur <= end) {
-      dateList.push(cur.toISOString().slice(0, 10))
+      dateList.push(toLocalDateStr(cur))
       cur.setDate(cur.getDate() + 1)
     }
 
@@ -100,7 +101,7 @@ export async function POST(req: Request) {
     const firstSeenMap = new Map<string, string>()
     for (const e of allFirst) {
       if (!firstSeenMap.has(e.deviceId)) {
-        firstSeenMap.set(e.deviceId, e.occurredAt.toISOString().slice(0, 10))
+        firstSeenMap.set(e.deviceId, toLocalDateStr(e.occurredAt))
       }
     }
 
@@ -111,7 +112,7 @@ export async function POST(req: Request) {
     }
 
     for (const e of dailyEvents) {
-      const day = e.occurredAt.toISOString().slice(0, 10)
+      const day = toLocalDateStr(e.occurredAt)
       if (!dayMap.has(day)) continue
       const b = dayMap.get(day)!
       b.devices.add(e.deviceId)
@@ -147,7 +148,7 @@ export async function POST(req: Request) {
 
     const firstSeenMap = new Map<string, string>()
     for (const e of allRetentionEvents) {
-      const day = e.occurredAt.toISOString().slice(0, 10)
+      const day = toLocalDateStr(e.occurredAt)
       if (!firstSeenMap.has(e.deviceId)) firstSeenMap.set(e.deviceId, day)
     }
 
@@ -161,20 +162,21 @@ export async function POST(req: Request) {
     // 每个设备活跃的日期集合
     const deviceActiveDays = new Map<string, Set<string>>()
     for (const e of allRetentionEvents) {
-      const day = e.occurredAt.toISOString().slice(0, 10)
+      const day = toLocalDateStr(e.occurredAt)
       if (!deviceActiveDays.has(e.deviceId)) deviceActiveDays.set(e.deviceId, new Set())
       deviceActiveDays.get(e.deviceId)!.add(day)
     }
 
     function addDays(dateStr: string, n: number): string {
-      const d = new Date(`${dateStr}T00:00:00Z`)
-      d.setUTCDate(d.getUTCDate() + n)
-      return d.toISOString().slice(0, 10)
+      const [y, m, d] = dateStr.split("-").map(Number)
+      const dt = new Date(y, m - 1, d)
+      dt.setDate(dt.getDate() + n)
+      return toLocalDateStr(dt)
     }
 
     function retentionRate(cohortDate: string, devices: Set<string>, dayOffset: number): number | null {
       const targetDay = addDays(cohortDate, dayOffset)
-      const today = new Date().toISOString().slice(0, 10)
+      const today = toLocalDateStr(new Date())
       if (targetDay > today) return null
       const retained = [...devices].filter(d => deviceActiveDays.get(d)?.has(targetDay)).length
       return devices.size > 0 ? Math.round((retained / devices.size) * 100) : null

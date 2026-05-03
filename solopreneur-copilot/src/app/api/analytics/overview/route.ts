@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/db/prisma"
-import { parseDateRange, buildDateList } from "@/lib/analytics/dateRange"
+import { parseDateRange, buildDateList, toLocalDateStr } from "@/lib/analytics/dateRange"
 
 // GET /api/analytics/overview?projectId=xxx&range=7d&version=all
 export async function GET(req: Request) {
@@ -52,7 +52,7 @@ export async function GET(req: Request) {
   const firstSeenMap = new Map<string, string>()
   for (const e of allFirstSeen) {
     if (!firstSeenMap.has(e.deviceId)) {
-      firstSeenMap.set(e.deviceId, e.occurredAt.toISOString().slice(0, 10))
+      firstSeenMap.set(e.deviceId, toLocalDateStr(e.occurredAt))
     }
   }
 
@@ -64,7 +64,7 @@ export async function GET(req: Request) {
   }
 
   for (const e of events) {
-    const day = e.occurredAt.toISOString().slice(0, 10)
+    const day = toLocalDateStr(e.occurredAt)
     if (!dayMap.has(day)) continue
     const bucket = dayMap.get(day)!
     bucket.devices.add(e.deviceId)
@@ -82,7 +82,7 @@ export async function GET(req: Request) {
   const recordDevicesByDay = new Map<string, Set<string>>()
   for (const e of events) {
     if (e.eventId !== "record_submit_success") continue
-    const day = e.occurredAt.toISOString().slice(0, 10)
+    const day = toLocalDateStr(e.occurredAt)
     if (!recordDevicesByDay.has(day)) recordDevicesByDay.set(day, new Set())
     recordDevicesByDay.get(day)!.add(e.deviceId)
   }

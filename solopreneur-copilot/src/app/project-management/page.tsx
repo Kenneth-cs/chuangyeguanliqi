@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react"
 import { Card } from "@/components/ui/card"
 import { DatePicker } from "@/components/ui/date-picker"
+import { toLocalDateStr } from "@/lib/analytics/dateRange"
 import {
   AlertTriangle, Clock, CheckSquare, Square, Rocket, Trash2,
   Plus, RefreshCw, ExternalLink, Github, Calendar,
@@ -156,7 +157,7 @@ function NewProjectModal({ onClose, onCreated }: { onClose: () => void; onCreate
             <div className="space-y-1">
               <label className="text-xs text-slate-500">MVP 截止日期</label>
               <DatePicker value={form.deadline} onChange={v => setForm(p => ({ ...p, deadline: v }))}
-                placeholder="选择截止日期" minDate={new Date().toISOString().slice(0, 10)} />
+                placeholder="选择截止日期" minDate={toLocalDateStr(new Date())} />
             </div>
             <div className="space-y-1">
               <label className="text-xs text-slate-500 flex items-center gap-1">

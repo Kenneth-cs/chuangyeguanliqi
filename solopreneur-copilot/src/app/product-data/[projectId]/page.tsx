@@ -9,6 +9,7 @@ import {
   Info, ChevronDown, ChevronUp, Download,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { toLocalDateStr } from "@/lib/analytics/dateRange"
 import { toast } from "sonner"
 
 // ── InfoTooltip：列头悬浮说明（方案 A，fixed 定位避免 overflow 截断）──
@@ -203,8 +204,8 @@ export default function ProductDetailPage() {
 
   // Excel 导出弹窗状态
   const [showExport, setShowExport] = useState(false)
-  const today = new Date().toISOString().slice(0, 10)
-  const sevenDaysAgo = new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10)
+  const today = toLocalDateStr(new Date())
+  const sevenDaysAgo = toLocalDateStr(new Date(Date.now() - 6 * 86400000))
   const [exportStartDate, setExportStartDate] = useState(sevenDaysAgo)
   const [exportEndDate, setExportEndDate] = useState(today)
   const [exportSheets, setExportSheets] = useState(new Set(["events", "daily", "retention"]))
