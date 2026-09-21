@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/db/prisma"
 import { toLocalDateStr } from "@/lib/analytics/dateRange"
+import { assertProjectAccess } from "@/lib/analytics/assertProjectAccess"
 import * as XLSX from "xlsx"
 
 // POST /api/analytics/export
@@ -18,10 +19,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "projectId、startDate、endDate 必填" }, { status: 400 })
   }
 
-  const project = await prisma.project.findFirst({
-    where: { id: projectId, userId: session.user.id },
-  })
-  if (!project) return NextResponse.json({ error: "项目不存在" }, { status: 404 })
+  const access = await assertProjectAccess(projectId, session.user.id)
+  if (!access.ok) return access.response
+  const project = await prisma.project.findUnique({ where: { id: projectId }, select: { name: true } })
 
   const start = new Date(`${startDate}T00:00:00.000Z`)
   const end = new Date(`${endDate}T23:59:59.999Z`)
@@ -201,7 +201,7 @@ export async function POST(req: Request) {
   const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer
   const arrayBuffer = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer
 
-  const fileName = `${project.name}_${startDate}_${endDate}.xlsx`
+  const fileName = `${project?.name ?? projectId}_${startDate}_${endDate}.xlsx`
     .replace(/[^\w\u4e00-\u9fa5._-]/g, "_")
 
   return new Response(arrayBuffer, {

@@ -1,29 +1,32 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/db/prisma"
+import { parseDateRange } from "@/lib/analytics/dateRange"
+import { assertProjectAccess } from "@/lib/analytics/assertProjectAccess"
 
-// GET /api/analytics/events?projectId=xxx&days=7
+// GET /api/analytics/events?projectId=xxx&range=7d&version=all
 export async function GET(req: Request) {
   const session = await auth()
   if (!session?.user?.id) return NextResponse.json({ error: "未登录" }, { status: 401 })
 
   const { searchParams } = new URL(req.url)
   const projectId = searchParams.get("projectId")
-  const days = Math.min(parseInt(searchParams.get("days") ?? "7"), 90)
+  const range = searchParams.get("range") ?? "7d"
+  const version = searchParams.get("version") ?? "all"
 
   if (!projectId) return NextResponse.json({ error: "projectId 必填" }, { status: 400 })
 
-  const project = await prisma.project.findFirst({
-    where: { id: projectId, userId: session.user.id },
-  })
-  if (!project) return NextResponse.json({ error: "项目不存在" }, { status: 404 })
+  const access = await assertProjectAccess(projectId, session.user.id)
+  if (!access.ok) return access.response
 
-  const since = new Date()
-  since.setDate(since.getDate() - days)
-  since.setHours(0, 0, 0, 0)
+  const { start, end } = parseDateRange(range)
 
   const events = await prisma.appEvent.findMany({
-    where: { projectId, occurredAt: { gte: since } },
+    where: {
+      projectId,
+      occurredAt: { gte: start, lte: end },
+      ...(version !== "all" ? { appVersion: version } : {}),
+    },
     select: { eventId: true, eventName: true, deviceId: true, appVersion: true },
   })
 

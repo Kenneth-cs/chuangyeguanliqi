@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/db/prisma"
+import { assertProjectAccess } from "@/lib/analytics/assertProjectAccess"
 
 // GET /api/analytics/versions?projectId=xxx
 // 返回该项目上报过的所有 App 版本列表
@@ -12,10 +13,8 @@ export async function GET(req: Request) {
   const projectId = searchParams.get("projectId")
   if (!projectId) return NextResponse.json({ error: "projectId 必填" }, { status: 400 })
 
-  const project = await prisma.project.findFirst({
-    where: { id: projectId, userId: session.user.id },
-  })
-  if (!project) return NextResponse.json({ error: "项目不存在" }, { status: 404 })
+  const access = await assertProjectAccess(projectId, session.user.id)
+  if (!access.ok) return access.response
 
   const rows = await prisma.appEvent.findMany({
     where: { projectId, appVersion: { not: null } },

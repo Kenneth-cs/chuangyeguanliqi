@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/db/prisma"
 import { parseDateRange } from "@/lib/analytics/dateRange"
+import { assertProjectAccess } from "@/lib/analytics/assertProjectAccess"
 
 // GET /api/analytics/funnel?projectId=xxx&range=7d&steps=ev1,ev2,ev3&version=all
 // steps: 按顺序的 eventId 列表，逗号分隔
@@ -23,10 +24,8 @@ export async function GET(req: Request) {
   const steps = stepsParam.split(",").map((s) => s.trim()).filter(Boolean)
   if (steps.length < 2) return NextResponse.json({ error: "至少需要 2 个步骤" }, { status: 400 })
 
-  const project = await prisma.project.findFirst({
-    where: { id: projectId, userId: session.user.id },
-  })
-  if (!project) return NextResponse.json({ error: "项目不存在" }, { status: 404 })
+  const access = await assertProjectAccess(projectId, session.user.id)
+  if (!access.ok) return access.response
 
   const { start, end } = parseDateRange(range, customStart, customEnd)
 

@@ -247,14 +247,18 @@ export default function ProductDetailPage() {
       case "params":
         fetch(`/api/analytics/event-list${qs()}`).then(r => r.json()).then(async (list: ParamEventItem[]) => {
           setParamEventList(list)
-          const toSelect = paramsEventIdRef.current || (list.length > 0 ? list[0].eventId : "")
+          const prevId = paramsEventIdRef.current
+          const stillExists = list.some(e => e.eventId === prevId)
+          const toSelect = stillExists ? prevId : (list.length > 0 ? list[0].eventId : "")
           if (toSelect) {
-            if (!paramsEventIdRef.current) {
-              paramsEventIdRef.current = toSelect
-              setParamsEventId(toSelect)
-            }
+            paramsEventIdRef.current = toSelect
+            setParamsEventId(toSelect)
             const pData = await fetch(`/api/analytics/params${qs()}&eventId=${toSelect}`).then(r => r.json())
             setParamsData(pData)
+          } else {
+            paramsEventIdRef.current = ""
+            setParamsEventId("")
+            setParamsData(null)
           }
           done()
         }).catch(done)

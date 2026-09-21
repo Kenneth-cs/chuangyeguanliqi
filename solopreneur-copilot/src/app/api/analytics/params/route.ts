@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/db/prisma"
 import { parseDateRange } from "@/lib/analytics/dateRange"
+import { assertProjectAccess } from "@/lib/analytics/assertProjectAccess"
 
 // GET /api/analytics/params?projectId=xxx&eventId=xxx&range=7d&version=all
 // 返回指定事件的所有 params 字段值分布，字符串类型做频次统计，数字类型做均值+区间分布
@@ -17,10 +18,8 @@ export async function GET(req: Request) {
 
   if (!projectId || !eventId) return NextResponse.json({ error: "projectId 和 eventId 必填" }, { status: 400 })
 
-  const project = await prisma.project.findFirst({
-    where: { id: projectId, userId: session.user.id },
-  })
-  if (!project) return NextResponse.json({ error: "项目不存在" }, { status: 404 })
+  const access = await assertProjectAccess(projectId, session.user.id)
+  if (!access.ok) return access.response
 
   const { start, end } = parseDateRange(range)
 

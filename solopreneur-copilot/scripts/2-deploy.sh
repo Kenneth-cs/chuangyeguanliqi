@@ -96,10 +96,38 @@ echo "[4/5] 配置 Nginx 反向代理..."
 
 ssh -i $SSH_KEY -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_IP << 'NGINX_SCRIPT'
 sudo tee /etc/nginx/sites-available/solopreneur > /dev/null << 'NGINXEOF'
-# HTTP → HTTPS 跳转
+# IP 直接访问 (临时供未备案前测试)
 server {
     listen 80;
-    server_name www.superindividual.youqukeji.cn superindividual.youqukeji.cn 124.222.88.25;
+    server_name 124.222.88.25;
+    
+    location /_next/static/ {
+        alias /app/solopreneur-copilot/.next/static/;
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    location /public/ {
+        alias /app/solopreneur-copilot/public/;
+        expires 7d;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $http_connection;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+
+# HTTP → HTTPS 跳转 (仅针对域名)
+server {
+    listen 80;
+    server_name www.superindividual.youqukeji.cn superindividual.youqukeji.cn;
     return 301 https://www.superindividual.youqukeji.cn$request_uri;
 }
 
@@ -132,7 +160,7 @@ server {
         proxy_pass http://127.0.0.1:3000;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
+        proxy_set_header Connection $http_connection;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
